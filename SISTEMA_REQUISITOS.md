@@ -248,3 +248,5 @@ El sistema verifica automáticamente:
 ---
 
 **Este sistema garantiza que cualquier desarrollador pueda instalar y ejecutar el proyecto en menos de 5 minutos, sin importar su entorno o nivel de experiencia.**
+
+
