@@ -21,17 +21,23 @@ export interface Personal {
   empresa_id: string;
   servicio_id: string;
   email?: string;
+  telefono?: string;
   activo: boolean;
   sexo: 'M' | 'F';
   licencia_conducir: string;
   talla_zapatos: string;
-  talla_pantalones: string;
+  talla_pantalon: string;
   talla_poleras: string;
   zona_geografica: string;
   estado_id: number;
   estado_nombre?: string;
   comentario_estado: string;
+  profile_image_url?: string;
   ubicacion?: Ubicacion;
+  profesion?: string;
+  area?: string;
+  supervisor?: string;
+  tipo_asistencia?: string;
   contacto?: Contacto;
   contacto_emergencia?: ContactoEmergencia;
   formacion?: Formacion;
@@ -42,6 +48,7 @@ export interface Personal {
     id: string;
     nombre: string;
   };
+  fecha_inicio_contrato?: string;
   created_at: string;
   updated_at: string;
 }
@@ -73,10 +80,14 @@ export interface Curso {
   id: number;
   personal_id: string;
   nombre_curso: string;
-  fecha_obtencion: string;
-  institucion?: string;
-  fecha_inicio?: string;
-  fecha_fin?: string;
+  fecha_inicio?: string; // Fecha de inicio del curso
+  fecha_fin?: string; // Fecha de finalización del curso
+  fecha_vencimiento?: string; // Fecha de vencimiento del certificado
+  estado?: string; // Estado del curso (default: 'completado')
+  institucion?: string; // Institución que otorga el curso
+  descripcion?: string; // Descripción del curso
+  // Campos legacy (mantener para compatibilidad)
+  fecha_obtencion?: string;
   horas_academicas?: number;
   tipo_curso?: string;
   certificado?: boolean;
@@ -92,12 +103,43 @@ export interface Curso {
   updated_at: string;
 }
 
+// Interfaz para documentos según la API real del backend
+export interface Documento {
+  id: number;
+  rut_persona: string;
+  nombre_documento: string;
+  tipo_documento: string;
+  nombre_archivo: string;
+  nombre_original: string;
+  tipo_mime: string;
+  tamaño_bytes: number;
+  ruta_archivo: string;
+  descripcion?: string;
+  fecha_subida: string;
+  subido_por: string;
+}
+
+// Tipos de documentos disponibles (según backend)
+export interface TipoDocumento {
+  label: string;
+  value: string;
+}
+
+// Formatos de archivo soportados
+export interface FormatoArchivo {
+  extension: string;
+  tipo_mime: string;
+  descripcion: string;
+  activo: boolean;
+}
+
 // Interfaces auxiliares
 export interface Ubicacion {
-  direccion: string;
-  ciudad: string;
-  region: string;
+  direccion?: string;
+  ciudad?: string;
+  region?: string;
   codigo_postal?: string;
+  comuna?: string;
 }
 
 export interface Contacto {
@@ -159,6 +201,45 @@ export interface PaginatedResponse<T> {
   message?: string;
 }
 
+// Interfaces específicas para respuestas según documentación de la API
+export interface CursosResponse {
+  success: boolean;
+  data: {
+    persona: {
+      rut: string;
+      nombre: string;
+      cargo: string;
+      zona_geografica: string;
+    } | null;
+    cursos: Curso[];
+  };
+  message?: string;
+}
+
+export interface DocumentosResponse {
+  success: boolean;
+  data: Documento[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+  message?: string;
+}
+
+export interface ProfileImageResponse {
+  success: boolean;
+  data: {
+    profile_image_url: string;
+    rut: string;
+    filename?: string;
+    size?: number;
+    mimetype?: string;
+  };
+  message?: string;
+}
+
 // Interfaces para formularios
 export interface LoginForm {
   email: string;
@@ -183,7 +264,7 @@ export interface PersonalDisponible {
   cargo: string;
   estado_id: number;
   talla_zapatos?: string;
-  talla_pantalones?: string;
+  talla_pantalon?: string;
   talla_poleras?: string;
   zona_geografica?: string;
   nombre?: string;
@@ -191,6 +272,7 @@ export interface PersonalDisponible {
   email?: string;
   telefono?: string;
   activo?: boolean;
+  profile_image_url?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -203,13 +285,14 @@ export interface CreatePersonalDisponibleData {
   cargo: string;
   estado_id: number;
   talla_zapatos?: string;
-  talla_pantalones?: string;
+  talla_pantalon?: string;
   talla_poleras?: string;
   zona_geografica?: string;
-  nombre?: string;
-  apellido?: string;
-  email?: string;
-  telefono?: string;
+  nombres?: string; // Campo combinado de nombre completo
+  nombre?: string; // Campo legacy
+  apellido?: string; // Campo legacy
+  email?: string; // Campo de contacto
+  telefono?: string; // Campo de contacto
 }
 
 // Interface extendida para el registro que incluye datos de personal disponible
@@ -221,7 +304,7 @@ export interface ExtendedRegisterForm extends RegisterForm {
   cargo: string;
   estado_id: number;
   talla_zapatos?: string;
-  talla_pantalones?: string;
+  talla_pantalon?: string;
   talla_poleras?: string;
   zona_geografica?: string;
   telefono?: string;
@@ -244,35 +327,45 @@ export interface CreatePersonalData {
   apellido: string;
   rut: string;
   fecha_nacimiento: string;
+  edad?: string; // Campo de edad editable
   cargo: string;
-  empresa_id: string;
-  servicio_id: string;
-  activo: boolean;
   sexo: 'M' | 'F';
   licencia_conducir: string;
+  estado_id: number; // Campo requerido por el backend
+  email?: string; // Campo de contacto
+  telefono?: string; // Campo de contacto
   talla_zapatos: string;
-  talla_pantalones: string;
+  talla_pantalon: string;
   talla_poleras: string;
   zona_geografica: string;
 }
 
 export interface UpdatePersonalData {
+  nombres?: string; // Campo principal para nombre completo
+  sexo?: 'M' | 'F';
+  licencia_conducir?: string;
+  cargo?: string;
+  estado_id?: number;
+  fecha_nacimiento?: string; // Campo requerido por el backend
+  edad?: string; // Campo de edad editable
+  talla_zapatos?: string;
+  talla_pantalon?: string;
+  talla_poleras?: string;
+  zona_geografica?: string;
+  ubicacion?: Partial<Ubicacion>;
+  comentario_estado?: string;
+  // Campos legacy (mantener para compatibilidad)
   nombre?: string;
   apellido?: string;
   rut?: string;
-  fecha_nacimiento?: string;
-  cargo?: string;
   empresa_id?: string;
   servicio_id?: string;
   activo?: boolean;
-  sexo?: 'M' | 'F';
-  licencia_conducir?: string;
-  talla_zapatos?: string;
-  talla_pantalones?: string;
-  talla_poleras?: string;
-  zona_geografica?: string;
-  estado_id?: number;
-  comentario_estado?: string;
+  // Contacto y emergencia
+  telefono?: string;
+  email?: string;
+  contacto?: Contacto;
+  contacto_emergencia?: ContactoEmergencia;
 }
 
 export interface CreateServicioData {
@@ -295,15 +388,25 @@ export interface CreateCursoData {
   rut_persona?: string; // Para crear desde el modal
   personal_id?: string; // Para crear directamente
   nombre_curso: string;
-  fecha_obtencion: string;
-  institucion?: string;
-  fecha_inicio?: string;
-  fecha_fin?: string;
+  fecha_inicio?: string; // Fecha de inicio del curso
+  fecha_fin?: string; // Fecha de finalización del curso
+  fecha_vencimiento?: string; // Fecha de vencimiento del certificado
+  estado?: string; // Estado del curso (default: 'completado')
+  institucion?: string; // Institución que otorga el curso
+  descripcion?: string; // Descripción del curso
+  // Campos legacy (mantener para compatibilidad)
+  fecha_obtencion?: string;
   horas_academicas?: number;
   tipo_curso?: string;
   certificado?: boolean;
   observaciones?: string;
   activo?: boolean;
+  // Nuevos campos para soporte de archivos (POST /api/cursos ahora acepta multipart/form-data)
+  archivo?: File; // Archivo adjunto del curso (se guarda en cursos_certificaciones/)
+  nombre_archivo_destino?: string; // Nombre final deseado para el archivo (opcional)
+  fecha_emision?: string; // Fecha de emisión del documento
+  dias_validez?: number; // Días de validez del documento
+  institucion_emisora?: string; // Institución emisora del documento
 }
 
 export interface UpdateCursoData {
@@ -317,6 +420,26 @@ export interface UpdateCursoData {
   tipo_curso?: string;
   certificado?: boolean;
   observaciones?: string;
+  activo?: boolean;
+}
+
+// Interfaces para documentos
+export interface CreateDocumentoData {
+  personal_id: string;
+  nombre_documento: string;
+  tipo_documento?: string;
+  archivo: File;
+  descripcion?: string; // Campo opcional según documentación de la API
+  fecha_emision?: string;
+  fecha_vencimiento?: string;
+  dias_validez?: number;
+  estado_documento?: string;
+  institucion_emisora?: string;
+}
+
+export interface UpdateDocumentoData {
+  nombre_documento?: string;
+  tipo_documento?: string;
   activo?: boolean;
 }
 
@@ -391,7 +514,7 @@ export interface ValidationErrors {
   estado_id?: string;
   comentario_estado?: string;
   talla_zapatos?: string;
-  talla_pantalones?: string;
+  talla_pantalon?: string;
   talla_poleras?: string;
 }
 
@@ -399,4 +522,418 @@ export interface ValidationErrors {
 export interface ValidatePersonalDataResult {
   isValid: boolean;
   errors: ValidationErrors;
+}
+
+// ==================== INTERFACES PARA SERVICIOS ====================
+
+export interface Cartera {
+  id: number;
+  nombre: string;
+  fecha_creacion: string;
+  total_clientes: number;
+  total_nodos: number;
+  clientes?: Cliente[];
+}
+
+export interface Cliente {
+  id: number;
+  nombre: string;
+  cartera_id: number;
+  created_at: string;
+  region_id?: number;
+  cartera_nombre?: string;
+  total_nodos: number;
+  minimo_personal?: number;
+  nodos?: Nodo[];
+  metodo_subida_documentos?: string;
+  config_subida_documentos?: any;
+}
+
+export interface Nodo {
+  id: number;
+  nombre: string;
+  cliente_id: number;
+  created_at: string;
+  cliente_nombre?: string;
+  cartera_id?: number;
+  cartera_nombre?: string;
+}
+
+export interface EstructuraCompleta {
+  id: number;
+  nombre: string;
+  created_at: string;
+  clientes: Cliente[];
+}
+
+export interface EstadisticasServicios {
+  totales: {
+    carteras: number;
+    clientes: number;
+    nodos: number;
+  };
+  por_cartera: {
+    id: number;
+    cartera_nombre: string;
+    total_clientes: number;
+    total_nodos: number;
+  }[];
+}
+
+export interface CreateCarteraData {
+  name: string;
+}
+
+export interface CreateClienteData {
+  nombre: string;
+  cartera_id: number;
+  region_id?: number;
+}
+
+export interface CreateNodoData {
+  nombre: string;
+  cliente_id: number;
+}
+
+export interface ServiciosParams {
+  limit?: number;
+  offset?: number;
+  search?: string;
+  cartera_id?: number;
+  cliente_id?: number;
+}
+
+// ==================== INTERFACES PARA PROGRAMACIÓN SEMANAL ====================
+
+export interface ProgramacionSemanal {
+  id: number;
+  rut: string;
+  nombre_persona: string;
+  cargo: string;
+  cartera_id: number;
+  nombre_cartera: string;
+  cliente_id?: number;
+  nombre_cliente?: string;
+  nodo_id?: number;
+  nombre_nodo?: string;
+  semana_inicio: string;
+  semana_fin: string;
+  lunes: boolean;
+  martes: boolean;
+  miercoles: boolean;
+  jueves: boolean;
+  viernes: boolean;
+  sabado: boolean;
+  domingo: boolean;
+  horas_estimadas: number;
+  observaciones?: string;
+  estado: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface ProgramacionRequest {
+  rut: string;
+  cartera_id: number;
+  cliente_id?: number;
+  nodo_id?: number;
+  semana_inicio: string;
+  lunes?: boolean;
+  martes?: boolean;
+  miercoles?: boolean;
+  jueves?: boolean;
+  viernes?: boolean;
+  sabado?: boolean;
+  domingo?: boolean;
+  horas_estimadas?: number;
+  observaciones?: string;
+  estado?: string;
+}
+
+export interface ProgramacionResponse {
+  success: boolean;
+  data: {
+    cartera: {
+      id: number;
+      nombre: string;
+    };
+    semana: {
+      inicio: string;
+      fin: string;
+    };
+    programacion: ProgramacionSemanal[];
+  };
+  message?: string;
+}
+
+export interface ProgramacionPersonaResponse {
+  success: boolean;
+  data: {
+    persona: {
+      rut: string;
+      nombre: string;
+      cargo: string;
+    };
+    programacion: ProgramacionSemanal[];
+  };
+  message?: string;
+}
+
+export interface ProgramacionSemanaResponse {
+  success: boolean;
+  data: {
+    semana: {
+      inicio: string;
+      fin: string;
+    };
+    programacion: {
+      cartera: {
+        id: number;
+        nombre: string;
+      };
+      trabajadores: ProgramacionSemanal[];
+    }[];
+  };
+  message?: string;
+}
+
+export interface CreateProgramacionData {
+  rut: string;
+  cartera_id: number;
+  cliente_id?: number;
+  nodo_id?: number;
+  semana_inicio: string;
+  lunes?: boolean;
+  martes?: boolean;
+  miercoles?: boolean;
+  jueves?: boolean;
+  viernes?: boolean;
+  sabado?: boolean;
+  domingo?: boolean;
+  horas_estimadas?: number;
+  observaciones?: string;
+  estado?: string;
+}
+
+export interface UpdateProgramacionData {
+  cliente_id?: number;
+  nodo_id?: number;
+  lunes?: boolean;
+  martes?: boolean;
+  miercoles?: boolean;
+  jueves?: boolean;
+  viernes?: boolean;
+  sabado?: boolean;
+  domingo?: boolean;
+  horas_estimadas?: number;
+  observaciones?: string;
+  estado?: string;
+}
+
+export interface ProgramacionFilters {
+  cartera_id?: number;
+  semana?: string;
+  fecha?: string;
+  rut?: string;
+  semanas?: number;
+}
+
+// ==================== INTERFACES PARA DOCUMENTOS VENCIDOS ====================
+
+export interface DocumentoVencido {
+  id: number;
+  rut_persona: string;
+  nombre_documento: string;
+  tipo_documento: string;
+  nombre_archivo: string;
+  nombre_original: string;
+  tipo_mime: string;
+  tamaño_bytes: number;
+  ruta_archivo: string;
+  descripcion?: string;
+  fecha_subida: string;
+  subido_por: string;
+  fecha_emision?: string;
+  fecha_vencimiento?: string;
+  dias_validez?: number;
+  estado_documento?: string;
+  institucion_emisora?: string;
+  dias_restantes?: number;
+  personal?: {
+    rut: string;
+    nombres: string;
+    cargo: string;
+  };
+}
+
+export interface DocumentosVencidosResponse {
+  success: boolean;
+  data: DocumentoVencido[];
+  message?: string;
+}
+
+export interface UpdateDocumentoData {
+  fecha_emision?: string;
+  fecha_vencimiento?: string;
+  dias_validez?: number;
+  estado_documento?: string;
+  institucion_emisora?: string;
+}
+
+// ==================== INTERFACES PARA MÍNIMO PERSONAL ====================
+
+export interface MinimoPersonal {
+  id: number;
+  servicio_id: number;
+  cartera_id: number;
+  cliente_id?: number;
+  nodo_id?: number;
+  minimo_personal: number;
+  descripcion?: string;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+  servicio?: {
+    id: number;
+    nombre: string;
+  };
+  cartera?: {
+    id: number;
+    nombre: string;
+  };
+  cliente?: {
+    id: number;
+    nombre: string;
+  };
+  nodo?: {
+    id: number;
+    nombre: string;
+  };
+}
+
+export interface CreateMinimoPersonalData {
+  servicio_id: number;
+  cartera_id: number;
+  cliente_id?: number;
+  nodo_id?: number;
+  minimo_personal: number;
+  descripcion?: string;
+  activo?: boolean;
+}
+
+export interface UpdateMinimoPersonalData {
+  servicio_id?: number;
+  cartera_id?: number;
+  cliente_id?: number;
+  nodo_id?: number;
+  minimo_personal?: number;
+  descripcion?: string;
+  activo?: boolean;
+}
+
+export interface MinimoPersonalCalculo {
+  id: number;
+  servicio_id: number;
+  cartera_id: number;
+  cliente_id?: number;
+  nodo_id?: number;
+  minimo_requerido: number;
+  personal_asignado: number;
+  personal_disponible: number;
+  cumple_minimo: boolean;
+  deficit?: number;
+  exceso?: number;
+  calculado_en: string;
+  detalles?: {
+    personal_por_cargo: { [cargo: string]: number };
+    personal_por_zona: { [zona: string]: number };
+  };
+}
+
+// ==================== INTERFACES PARA ACUERDOS ====================
+
+export interface Acuerdo {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  tipo_acuerdo: 'servicio' | 'personal' | 'cliente' | 'general';
+  fecha_inicio: string;
+  fecha_fin: string;
+  estado: 'activo' | 'inactivo' | 'vencido' | 'pendiente';
+  condiciones?: string;
+  observaciones?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  activado_por?: string;
+  activado_en?: string;
+  desactivado_por?: string;
+  desactivado_en?: string;
+}
+
+export interface CreateAcuerdoData {
+  nombre: string;
+  descripcion?: string;
+  tipo_acuerdo: 'servicio' | 'personal' | 'cliente' | 'general';
+  fecha_inicio: string;
+  fecha_fin: string;
+  condiciones?: string;
+  observaciones?: string;
+  estado?: 'activo' | 'inactivo' | 'vencido' | 'pendiente';
+}
+
+export interface UpdateAcuerdoData {
+  nombre?: string;
+  descripcion?: string;
+  tipo_acuerdo?: 'servicio' | 'personal' | 'cliente' | 'general';
+  fecha_inicio?: string;
+  fecha_fin?: string;
+  condiciones?: string;
+  observaciones?: string;
+  estado?: 'activo' | 'inactivo' | 'vencido' | 'pendiente';
+}
+
+export interface AcuerdoVencer {
+  id: number;
+  nombre: string;
+  fecha_fin: string;
+  dias_restantes: number;
+  estado: 'activo' | 'inactivo' | 'vencido' | 'pendiente';
+  tipo_acuerdo: 'servicio' | 'personal' | 'cliente' | 'general';
+  alerta: 'critica' | 'advertencia' | 'normal';
+}
+
+// Tipos para notificaciones
+export interface NotificacionDocumento {
+  id: string;
+  tipo: 'documento_vencido' | 'documento_por_vencer' | 'documento_faltante' | 'documento_renovado' | 'personal_sin_asignacion' | 'personal_actualizacion' | 'servicios_sin_personal' | 'programacion_pendiente' | 'mantenimiento_proximo' | 'auditoria_critica' | 'auditoria_sistema' | 'auditoria_estadisticas';
+  prioridad: 'alta' | 'media' | 'baja';
+  titulo: string;
+  mensaje: string;
+  personal_id: string | null;
+  personal_nombre: string | null;
+  documento_id?: string | null;
+  documento_nombre?: string | null;
+  fecha_vencimiento?: string | null;
+  dias_restantes?: number | null;
+  leida: boolean;
+  fecha_creacion: string;
+  accion_requerida?: string;
+}
+
+export interface CreateNotificacionData {
+  tipo: string;
+  prioridad: 'alta' | 'media' | 'baja';
+  titulo: string;
+  mensaje: string;
+  personal_id: string;
+  documento_id?: string;
+  fecha_vencimiento?: string;
+  accion_requerida?: string;
+}
+
+export interface UpdateNotificacionData {
+  leida?: boolean;
+  accion_requerida?: string;
 }

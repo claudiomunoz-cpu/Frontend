@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { X, Upload, FileText, AlertCircle } from 'lucide-react';
+import { X, Upload, FileText, AlertTriangle } from 'lucide-react';
+import { useUploadDocumento, useTiposDocumentos, validateDocumentoData, createDocumentoFormData, getTiposDocumentosPersonal } from '../../hooks/useDocumentos';
+import { CreateDocumentoData } from '../../types';
+import { DocumentosVencidosModal } from './DocumentosVencidosModal';
 
 interface DocumentModalProps {
   isOpen: boolean;
@@ -7,6 +10,7 @@ interface DocumentModalProps {
   onSuccess: (document: any) => void;
   rutPersona: string;
   nombrePersona: string;
+  personalId: string; // ID del personal para la API
 }
 
 const DocumentModal: React.FC<DocumentModalProps> = ({
@@ -15,23 +19,28 @@ const DocumentModal: React.FC<DocumentModalProps> = ({
   onSuccess,
   rutPersona,
   nombrePersona,
+  personalId,
 }) => {
   const [formData, setFormData] = useState({
-    nombre: '',
-    tipo: 'contrato',
+    nombre_documento: '',
+    tipo_documento: '',
     archivo: null as File | null,
+    fecha_emision: '',
+    fecha_vencimiento: '',
+    dias_validez: '',
+    estado_documento: '',
+    institucion_emisora: '',
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [showDocumentosVencidos, setShowDocumentosVencidos] = useState(false);
 
-  const tiposDocumento = [
-    { value: 'contrato', label: 'Contrato de Trabajo' },
-    { value: 'identidad', label: 'Carnet de Identidad' },
-    { value: 'medico', label: 'Examen Preocupacional' },
-    { value: 'antecedentes', label: 'Certificado de Antecedentes' },
-    { value: 'certificado', label: 'Certificado de Estudios' },
-    { value: 'otro', label: 'Otro' },
-  ];
+  const uploadMutation = useUploadDocumento();
+  const { data: tiposDocumento, isLoading: loadingTipos } = useTiposDocumentos();
+  
+  // Filtrar solo tipos de documentos personales
+  const tiposDocumentosPersonal = getTiposDocumentosPersonal();
+
+  const isLoading = uploadMutation.isLoading || loadingTipos;
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -39,115 +48,109 @@ const DocumentModal: React.FC<DocumentModalProps> = ({
       [field]: value
     }));
 
-    // Limpiar error del campo
-    if (errors[field]) {
-      setErrors(prev => ({
-        ...prev,
-        [field]: ''
-      }));
+    // Limpiar errores al cambiar input
+    if (errors.length > 0) {
+      setErrors([]);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validar tipo de archivo
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-      if (!allowedTypes.includes(file.type)) {
-        setErrors(prev => ({
-          ...prev,
-          archivo: 'Solo se permiten archivos PDF, JPG, JPEG o PNG'
-        }));
-        return;
-      }
-
-      // Validar tamaño (máximo 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors(prev => ({
-          ...prev,
-          archivo: 'El archivo no puede ser mayor a 5MB'
-        }));
-        return;
-      }
-
       setFormData(prev => ({
         ...prev,
         archivo: file
       }));
 
-      // Limpiar error
-      if (errors.archivo) {
-        setErrors(prev => ({
-          ...prev,
-          archivo: ''
-        }));
+      // Limpiar errores
+      if (errors.length > 0) {
+        setErrors([]);
       }
     }
-  };
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.nombre.trim()) {
-      newErrors.nombre = 'El nombre del documento es requerido';
-    }
-
-    if (!formData.archivo) {
-      newErrors.archivo = 'Debe seleccionar un archivo';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) {
+    if (!formData.archivo) {
+      setErrors(['Debe seleccionar un archivo']);
       return;
     }
 
-    setIsSubmitting(true);
+    const documentoData: CreateDocumentoData = {
+      personal_id: personalId || rutPersona, // Usar RUT si personalId no está disponible
+      nombre_documento: formData.nombre_documento,
+      tipo_documento: formData.tipo_documento,
+      archivo: formData.archivo,
+      fecha_emision: formData.fecha_emision || undefined,
+      fecha_vencimiento: formData.fecha_vencimiento || undefined,
+      dias_validez: formData.dias_validez ? parseInt(formData.dias_validez) : undefined,
+      estado_documento: formData.estado_documento || undefined,
+      institucion_emisora: formData.institucion_emisora || undefined
+    };
+
+    const validationErrors = validateDocumentoData(documentoData);
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
 
     try {
-      // Simular subida de archivo
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const formDataToSend = createDocumentoFormData(documentoData);
+      const response = await uploadMutation.mutateAsync(formDataToSend);
 
-      const nuevoDocumento = {
-        id: Date.now(), // ID temporal
-        nombre: formData.nombre,
-        tipo: formData.tipo,
-        fecha: new Date().toISOString().split('T')[0],
-        archivo: formData.archivo?.name || 'documento.pdf',
-        estado: 'vigente'
-      };
-
-      onSuccess(nuevoDocumento);
-      
-      // Limpiar formulario
-      setFormData({
-        nombre: '',
-        tipo: 'contrato',
-        archivo: null,
-      });
-      setErrors({});
-      onClose();
-      
-    } catch (error) {
+      if (response.success) {
+        onSuccess(response.data);
+        
+        // Limpiar formulario
+        setFormData({
+          nombre_documento: '',
+          tipo_documento: '',
+          archivo: null,
+          fecha_emision: '',
+          fecha_vencimiento: '',
+          dias_validez: '',
+          estado_documento: '',
+          institucion_emisora: '',
+        });
+        setErrors([]);
+        onClose();
+      }
+    } catch (error: any) {
       console.error('Error al subir documento:', error);
-      setErrors({ general: 'Error al subir el documento. Intente nuevamente.' });
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error response data:', error.response?.data);
+      
+      // Manejar diferentes tipos de errores
+      if (error.response?.status === 400) {
+        const errorMessage = error.response?.data?.message || 'Los datos ingresados no son válidos.';
+        setErrors([`Error 400: ${errorMessage}`]);
+      } else if (error.response?.status === 500) {
+        const errorMessage = error.response?.data?.error || '';
+        if (errorMessage.includes('Multipart: Boundary not found')) {
+          setErrors(['Error del servidor: Problema con el formato del archivo. Intente con otro archivo.']);
+        } else if (errorMessage.includes('no existe la columna')) {
+          setErrors(['Error del servidor: La base de datos necesita ser actualizada. Contacte al administrador del sistema.']);
+        } else {
+          setErrors(['Error del servidor. Por favor, intente nuevamente más tarde.']);
+        }
+      } else {
+        setErrors(['Error al subir el documento. Por favor, intente nuevamente.']);
+      }
     }
   };
 
   const handleClose = () => {
     setFormData({
-      nombre: '',
-      tipo: 'contrato',
+      nombre_documento: '',
+      tipo_documento: '',
       archivo: null,
+      fecha_emision: '',
+      fecha_vencimiento: '',
+      dias_validez: '',
+      estado_documento: '',
+      institucion_emisora: '',
     });
-    setErrors({});
+    setErrors([]);
     onClose();
   };
 
@@ -160,12 +163,21 @@ const DocumentModal: React.FC<DocumentModalProps> = ({
           <h2 className="text-xl font-semibold text-gray-900">
             Subir Documento
           </h2>
-          <button
-            onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowDocumentosVencidos(true)}
+              className="flex items-center px-3 py-2 text-sm bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition-colors"
+            >
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              Documentos Vencidos
+            </button>
+            <button
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
         </div>
 
         <div className="mb-4 p-3 bg-blue-50 rounded-lg">
@@ -178,6 +190,17 @@ const DocumentModal: React.FC<DocumentModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Errores */}
+          {errors.length > 0 && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              <ul className="list-disc list-inside space-y-1">
+                {errors.map((error) => (
+                  <li key={`error-${error.replace(/\s+/g, '-').toLowerCase()}`} className="text-sm">{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Nombre del documento */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -185,19 +208,13 @@ const DocumentModal: React.FC<DocumentModalProps> = ({
             </label>
             <input
               type="text"
-              value={formData.nombre}
-              onChange={(e) => handleInputChange('nombre', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.nombre ? 'border-red-500' : 'border-gray-300'
-              }`}
+              value={formData.nombre_documento}
+              onChange={(e) => handleInputChange('nombre_documento', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Ej: Contrato de Trabajo 2024"
+              disabled={isLoading}
+              required
             />
-            {errors.nombre && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <AlertCircle className="h-4 w-4 mr-1" />
-                {errors.nombre}
-              </p>
-            )}
           </div>
 
           {/* Tipo de documento */}
@@ -206,11 +223,14 @@ const DocumentModal: React.FC<DocumentModalProps> = ({
               Tipo de Documento *
             </label>
             <select
-              value={formData.tipo}
-              onChange={(e) => handleInputChange('tipo', e.target.value)}
+              value={formData.tipo_documento}
+              onChange={(e) => handleInputChange('tipo_documento', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isLoading}
+              required
             >
-              {tiposDocumento.map((tipo) => (
+              <option value="">Seleccionar tipo de documento personal</option>
+              {tiposDocumentosPersonal.map((tipo: any) => (
                 <option key={tipo.value} value={tipo.value}>
                   {tipo.label}
                 </option>
@@ -229,28 +249,117 @@ const DocumentModal: React.FC<DocumentModalProps> = ({
                 onChange={handleFileChange}
                 accept=".pdf,.jpg,.jpeg,.png"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                disabled={isLoading}
+                required
               />
             </div>
-            {errors.archivo && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <AlertCircle className="h-4 w-4 mr-1" />
-                {errors.archivo}
-              </p>
-            )}
             <p className="mt-1 text-xs text-gray-500">
               Formatos permitidos: PDF, JPG, JPEG, PNG (máximo 5MB)
             </p>
+            
+            {/* Mostrar archivo seleccionado */}
+            {formData.archivo && (
+              <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-800 flex items-center">
+                  <FileText className="h-4 w-4 mr-2" />
+                  {formData.archivo.name}
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Error general */}
-          {errors.general && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600 flex items-center">
-                <AlertCircle className="h-4 w-4 mr-2" />
-                {errors.general}
+          {/* Información de Validez del Documento */}
+          <div className="border-t border-gray-200 pt-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Información de Validez</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Fecha de Emisión */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Fecha de Emisión
+                </label>
+                <input
+                  type="date"
+                  value={formData.fecha_emision}
+                  onChange={(e) => handleInputChange('fecha_emision', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isLoading}
+                />
+              </div>
+
+              {/* Fecha de Vencimiento */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Fecha de Vencimiento
+                </label>
+                <input
+                  type="date"
+                  value={formData.fecha_vencimiento}
+                  onChange={(e) => handleInputChange('fecha_vencimiento', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isLoading}
+                />
+              </div>
+
+              {/* Días de Validez */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Días de Validez
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.dias_validez}
+                  onChange={(e) => handleInputChange('dias_validez', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Ej: 365"
+                  disabled={isLoading}
+                />
+              </div>
+
+              {/* Estado del Documento */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Estado del Documento
+                </label>
+                <select
+                  value={formData.estado_documento}
+                  onChange={(e) => handleInputChange('estado_documento', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={isLoading}
+                >
+                  <option value="">Seleccionar estado</option>
+                  <option value="vigente">Vigente</option>
+                  <option value="vencido">Vencido</option>
+                  <option value="por_vencer">Por Vencer</option>
+                  <option value="sin_fecha">Sin Fecha</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Institución Emisora */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Institución Emisora
+              </label>
+              <input
+                type="text"
+                value={formData.institucion_emisora}
+                onChange={(e) => handleInputChange('institucion_emisora', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Ej: Ministerio del Trabajo, SII, etc."
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Información adicional */}
+            <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Nota:</strong> Los campos de validez son opcionales. Si no se especifican fechas, 
+                el documento se considerará sin fecha de vencimiento.
               </p>
             </div>
-          )}
+          </div>
 
           {/* Botones */}
           <div className="flex gap-3 pt-4">
@@ -258,15 +367,16 @@ const DocumentModal: React.FC<DocumentModalProps> = ({
               type="button"
               onClick={handleClose}
               className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={isLoading}
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isLoading}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
-              {isSubmitting ? (
+              {isLoading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Subiendo...
@@ -281,6 +391,12 @@ const DocumentModal: React.FC<DocumentModalProps> = ({
           </div>
         </form>
       </div>
+      
+      {/* Modal de Documentos Vencidos */}
+      <DocumentosVencidosModal
+        isOpen={showDocumentosVencidos}
+        onClose={() => setShowDocumentosVencidos(false)}
+      />
     </div>
   );
 };

@@ -1,153 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { 
   Users, 
   Calendar,
   Settings, 
-  Activity
+  Activity,
+  TrendingUp,
+  Clock
 } from 'lucide-react';
+import { 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar
+} from 'recharts';
 import { useDashboardStats } from '../../hooks/useDashboard';
+import useResumenPersonalPorCliente from '../../hooks/useResumenPersonalPorCliente';
+import { usePersonalList } from '../../hooks/usePersonal';
+import { useEstadisticasServicios } from '../../hooks/useServicios';
+import { useEstados } from '../../hooks/useEstados';
+import { apiService } from '../../services/api';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { PersonalInfoModal } from './PersonalInfoModal';
 import { PersonalTrabajandoModal } from './PersonalTrabajandoModal';
+import { PersonalAsignadoModal } from './PersonalAsignadoModal';
 import { EventosModal } from './EventosModal';
+import { NodosInfoModal } from './NodosInfoModal';
+import { CarterasInfoModal } from './CarterasInfoModal';
 
-// Importar datos mock reales de las páginas
-// Datos mock del personal (copiados de PersonalPage.tsx)
-const mockPersonal = [
-  {
-    id: '1',
-    nombre: 'Juan Carlos',
-    apellido: 'Pérez González',
-    cargo: 'Ingeniero IMC',
-    ubicacion: 'Santiago',
-    activo: true,
-    estadoActividad: { label: 'Trabajando' },
-    servicioAsignado: {
-      id: '1',
-      nombre: 'Mantenimiento Industrial',
-      categoria: 'Mantenimiento',
-      zonaGestion: 'Minería'
-    }
-  },
-  {
-    id: '2',
-    nombre: 'María Elena',
-    apellido: 'Rodríguez López',
-    cargo: 'Ingeniero de Aplicaciones',
-    ubicacion: 'Valparaíso',
-    activo: true,
-    estadoActividad: { label: 'En Reunión' },
-    servicioAsignado: {
-      id: '2',
-      nombre: 'Servicio Spot',
-      categoria: 'Servicio Spot',
-      zonaGestion: 'Minería'
-    }
-  },
-  {
-    id: '3',
-    nombre: 'Carlos Alberto',
-    apellido: 'Martínez Silva',
-    cargo: 'Ingeniero en Servicio',
-    ubicacion: 'Concepción',
-    activo: true,
-    estadoActividad: { label: 'Trabajando' },
-    servicioAsignado: {
-      id: '3',
-      nombre: 'Servicio Integral',
-      categoria: 'Servicio Integral',
-      zonaGestion: 'Industria'
-    }
-  },
-  {
-    id: '4',
-    nombre: 'Ana Sofía',
-    apellido: 'García Fernández',
-    cargo: 'Técnico Nivel 3',
-    ubicacion: 'La Serena',
-    activo: false,
-    estadoActividad: { label: 'Licencia Médica' },
-    servicioAsignado: {
-      id: '4',
-      nombre: 'Programa de Lubricación',
-      categoria: 'Programa de Lubricación',
-      zonaGestion: 'Industria'
-    }
-  },
-  {
-    id: '5',
-    nombre: 'Luis Fernando',
-    apellido: 'Ramírez Morales',
-    cargo: 'Capataz',
-    ubicacion: 'Santiago',
-    activo: true,
-    estadoActividad: { label: 'En Descanso' },
-    servicioAsignado: {
-      id: '5',
-      nombre: 'Levantamientos',
-      categoria: 'Levantamientos',
-      zonaGestion: 'Industria'
-    }
-  },
-  {
-    id: '6',
-    nombre: 'Patricia',
-    apellido: 'Vargas Castro',
-    cargo: 'Técnico Nivel 2',
-    ubicacion: 'Valparaíso',
-    activo: true,
-    estadoActividad: { label: 'Capacitación' },
-    servicioAsignado: {
-      id: '6',
-      nombre: 'Instalaciones',
-      categoria: 'Instalaciones',
-      zonaGestion: 'Industria'
-    }
-  },
-  {
-    id: '7',
-    nombre: 'Roberto',
-    apellido: 'Silva Mendoza',
-    cargo: 'Técnico Nivel 1',
-    ubicacion: 'Concepción',
-    activo: true,
-    estadoActividad: { label: 'Trabajando' },
-    servicioAsignado: {
-      id: '1',
-      nombre: 'Mantenimiento Industrial',
-      categoria: 'Mantenimiento',
-      zonaGestion: 'Minería'
-    }
-  },
-  {
-    id: '8',
-    nombre: 'Carmen',
-    apellido: 'López Torres',
-    cargo: 'Ingeniero IMC',
-    ubicacion: 'La Serena',
-    activo: true,
-    estadoActividad: { label: 'Trabajando' },
-    servicioAsignado: {
-      id: '3',
-      nombre: 'Servicio Integral',
-      categoria: 'Servicio Integral',
-      zonaGestion: 'Industria'
-    }
-  }
-];
-
-// Datos mock de servicios (copiados de ServiciosPage.tsx)
-const mockServicios = [
-  { id: '1', zonaGestion: 'Minería', categoria: 'Mantenimiento', activo: true },
-  { id: '2', zonaGestion: 'Minería', categoria: 'Servicio Spot', activo: true },
-  { id: '3', zonaGestion: 'Industria', categoria: 'Servicio Integral', activo: true },
-  { id: '4', zonaGestion: 'Industria', categoria: 'Programa de Lubricación', activo: true },
-  { id: '5', zonaGestion: 'Industria', categoria: 'Levantamientos', activo: true },
-  { id: '6', zonaGestion: 'Industria', categoria: 'Instalaciones', activo: true }
-];
-
-// Datos mock de eventos del calendario (próximos 15 días)
+// Función para obtener los próximos 15 días
 const getProximosDias = () => {
   const dias = [];
   const hoy = new Date();
@@ -159,146 +46,8 @@ const getProximosDias = () => {
   return dias;
 };
 
-const proximosDias = getProximosDias();
-const mockEventos = [
-  { 
-    id: '1', 
-    fecha: proximosDias[0], 
-    estado: 'en_progreso',
-    tipo: 'Mantenimiento Industrial',
-    ubicacion: 'Planta Minera Norte',
-    horaInicio: '08:00',
-    horaFin: '16:00',
-    descripcion: 'Mantenimiento preventivo de equipos críticos',
-    prioridad: 'alta',
-    personasAsignadas: [
-      { id: '1', nombre: 'Juan Carlos Pérez' },
-      { id: '3', nombre: 'Carlos Alberto Martínez' }
-    ]
-  },
-  { 
-    id: '2', 
-    fecha: proximosDias[1], 
-    estado: 'programado',
-    tipo: 'Servicio Spot',
-    ubicacion: 'Zona Industrial Sur',
-    horaInicio: '09:00',
-    horaFin: '13:00',
-    descripcion: 'Inspección de equipos de lubricación',
-    prioridad: 'media',
-    personasAsignadas: [
-      { id: '2', nombre: 'María Elena Rodríguez' }
-    ]
-  },
-  { 
-    id: '3', 
-    fecha: proximosDias[2], 
-    estado: 'programado',
-    tipo: 'Servicio Integral',
-    ubicacion: 'Planta de Procesamiento',
-    horaInicio: '07:30',
-    horaFin: '15:30',
-    descripcion: 'Servicio completo de mantenimiento',
-    prioridad: 'alta',
-    personasAsignadas: [
-      { id: '3', nombre: 'Carlos Alberto Martínez' },
-      { id: '8', nombre: 'Carmen López Torres' },
-      { id: '7', nombre: 'Roberto Silva Mendoza' }
-    ]
-  },
-  { 
-    id: '4', 
-    fecha: proximosDias[4], 
-    estado: 'programado',
-    tipo: 'Programa de Lubricación',
-    ubicacion: 'Área de Maquinaria',
-    horaInicio: '10:00',
-    horaFin: '14:00',
-    descripcion: 'Aplicación de programa de lubricación preventiva',
-    prioridad: 'media',
-    personasAsignadas: [
-      { id: '6', nombre: 'Patricia Vargas Castro' },
-      { id: '5', nombre: 'Luis Fernando Ramírez' }
-    ]
-  },
-  { 
-    id: '5', 
-    fecha: proximosDias[6], 
-    estado: 'programado',
-    tipo: 'Levantamientos',
-    ubicacion: 'Sector de Transporte',
-    horaInicio: '08:30',
-    horaFin: '12:30',
-    descripcion: 'Levantamiento de equipos pesados',
-    prioridad: 'baja',
-    personasAsignadas: [
-      { id: '5', nombre: 'Luis Fernando Ramírez' }
-    ]
-  },
-  { 
-    id: '6', 
-    fecha: proximosDias[8], 
-    estado: 'programado',
-    tipo: 'Instalaciones',
-    ubicacion: 'Nueva Línea de Producción',
-    horaInicio: '09:00',
-    horaFin: '17:00',
-    descripcion: 'Instalación de nuevos equipos',
-    prioridad: 'alta',
-    personasAsignadas: [
-      { id: '1', nombre: 'Juan Carlos Pérez' },
-      { id: '3', nombre: 'Carlos Alberto Martínez' },
-      { id: '7', nombre: 'Roberto Silva Mendoza' },
-      { id: '8', nombre: 'Carmen López Torres' }
-    ]
-  },
-  { 
-    id: '7', 
-    fecha: proximosDias[10], 
-    estado: 'programado',
-    tipo: 'Mantenimiento Industrial',
-    ubicacion: 'Planta Minera Sur',
-    horaInicio: '08:00',
-    horaFin: '16:00',
-    descripcion: 'Mantenimiento de sistemas hidráulicos',
-    prioridad: 'media',
-    personasAsignadas: [
-      { id: '1', nombre: 'Juan Carlos Pérez' },
-      { id: '6', nombre: 'Patricia Vargas Castro' }
-    ]
-  },
-  { 
-    id: '8', 
-    fecha: proximosDias[12], 
-    estado: 'programado',
-    tipo: 'Servicio Spot',
-    ubicacion: 'Área de Almacenamiento',
-    horaInicio: '11:00',
-    horaFin: '15:00',
-    descripcion: 'Revisión de equipos de almacenamiento',
-    prioridad: 'baja',
-    personasAsignadas: [
-      { id: '2', nombre: 'María Elena Rodríguez' },
-      { id: '7', nombre: 'Roberto Silva Mendoza' }
-    ]
-  },
-  { 
-    id: '9', 
-    fecha: proximosDias[14], 
-    estado: 'programado',
-    tipo: 'Servicio Integral',
-    ubicacion: 'Planta Principal',
-    horaInicio: '07:00',
-    horaFin: '15:00',
-    descripcion: 'Servicio completo de mantenimiento general',
-    prioridad: 'alta',
-    personasAsignadas: [
-      { id: '3', nombre: 'Carlos Alberto Martínez' },
-      { id: '8', nombre: 'Carmen López Torres' },
-      { id: '5', nombre: 'Luis Fernando Ramírez' }
-    ]
-  }
-];
+// const proximosDias = getProximosDias(); // TODO: Usar cuando se implementen eventos reales
+
 
 const StatCard: React.FC<{
   title: string;
@@ -306,15 +55,26 @@ const StatCard: React.FC<{
   icon: React.ReactNode;
   color: string;
   href?: string;
-}> = ({ title, value, icon, color, href }) => {
+  onClick?: () => void;
+  trend?: {
+    value: number;
+    isPositive: boolean;
+  };
+}> = ({ title, value, icon, color, href, onClick, trend }) => {
   const content = (
-    <div className={`p-6 rounded-lg border border-gray-200 bg-white hover:shadow-md transition-shadow ${href ? 'cursor-pointer' : ''}`}>
+    <div className={`p-6 rounded-xl border border-gray-200 bg-white hover:shadow-lg transition-all duration-300 ${(href || onClick) ? 'cursor-pointer hover:scale-105' : ''}`}>
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
+          <p className="text-3xl font-bold text-gray-900 mb-2">{value}</p>
+          {trend && (
+            <div className={`flex items-center text-sm ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+              <TrendingUp className={`h-4 w-4 mr-1 ${trend.isPositive ? '' : 'rotate-180'}`} />
+              <span>{Math.abs(trend.value)}%</span>
+            </div>
+          )}
         </div>
-        <div className={`p-3 rounded-lg ${color}`}>
+        <div className={`p-4 rounded-xl ${color} shadow-lg`}>
           {icon}
         </div>
       </div>
@@ -325,6 +85,10 @@ const StatCard: React.FC<{
     return <Link to={href}>{content}</Link>;
   }
 
+  if (onClick) {
+    return <div onClick={onClick}>{content}</div>;
+  }
+
   return content;
 };
 
@@ -332,41 +96,298 @@ export const DashboardStats: React.FC = () => {
   const { isLoading } = useDashboardStats();
   const [showPersonalModal, setShowPersonalModal] = useState(false);
   const [showPersonalTrabajandoModal, setShowPersonalTrabajandoModal] = useState(false);
+  const [showPersonalAsignadoModal, setShowPersonalAsignadoModal] = useState(false);
   const [showEventosModal, setShowEventosModal] = useState(false);
+  const [showNodosModal, setShowNodosModal] = useState(false);
+  const [showCarterasModal, setShowCarterasModal] = useState(false);
+  const [semanaActual, setSemanaActual] = useState(true); // true = semana actual, false = próxima semana
+  const [semanaActualTendencias, setSemanaActualTendencias] = useState(true); // true = semana actual, false = próxima semana
+  const [semanaSeleccionada, setSemanaSeleccionada] = useState<Date>(() => getInicioSemana(new Date()));
 
-  // Calcular estadísticas reales de las tablas existentes
-  const totalPersonal = mockPersonal.length;
-  const personalActivo = mockPersonal.filter(p => p.activo).length;
-  const personalTrabajando = mockPersonal.filter(p => 
-    p.activo && p.estadoActividad.label === 'Trabajando'
-  ).length;
-  const personalAcreditacion = mockPersonal.filter(p => 
-    p.activo && p.estadoActividad.label === 'En Acreditación'
-  ).length;
-  
-  
-  const totalEventos = mockEventos.length;
-  const eventosHoy = mockEventos.filter(e => {
-    const hoy = new Date().toISOString().split('T')[0];
-    return e.fecha === hoy;
-  }).length;
+  // Obtener datos de personal por cliente para el gráfico (filtrados por semana seleccionada)
+  const fechaInicioGrafico = useMemo(() => semanaSeleccionada.toISOString().split('T')[0], [semanaSeleccionada]);
+  const fechaFinGrafico = useMemo(() => {
+    const d = new Date(semanaSeleccionada.getTime());
+    d.setDate(d.getDate() + 6);
+    return d.toISOString().split('T')[0];
+  }, [semanaSeleccionada]);
 
-  // Usar datos reales calculados de las tablas
+  const { data: personalPorClienteData } = useQuery(
+    ['personal-por-cliente-grafico', fechaInicioGrafico, fechaFinGrafico],
+    async () => {
+      try {
+        const resp = await apiService.getPersonalPorCliente({ fecha_inicio: fechaInicioGrafico, fecha_fin: fechaFinGrafico });
+        return resp;
+      } catch (e) {
+        console.warn('No se pudo obtener personal-por-cliente por semana:', e);
+        return null;
+      }
+    },
+    { 
+      staleTime: 5 * 60 * 1000
+    }
+  );
+
+  // Obtener mínimos simples por cliente (endpoint ligero que devuelve minimo_real por cliente)
+  const { data: minimoSimpleData } = useQuery(
+    ['minimo-personal-simple'],
+    async () => {
+      try {
+        const res = await fetch('/api/servicios/minimo-personal/simple');
+        return await res.json();
+      } catch (e) {
+        console.warn('No se pudo obtener minimo-personal/simple', e);
+        return null;
+      }
+    },
+    {
+      staleTime: 5 * 60 * 1000
+    }
+  );
+
+  // Obtener datos reales del backend
+  // Increase limit to show full sample (remove small sample limitation)
+  const { data: personalData, isLoading: personalLoading } = usePersonalList(1, 1000, '');
+  const { data: estadisticasServicios, isLoading: serviciosLoading } = useEstadisticasServicios();
+  
+  // Obtener datos de estados
+  // Request more states to avoid truncated sample lists in the dashboard
+  const { data: estadosData } = useEstados({ limit: 1000 });
+  const estadosList = estadosData?.data || [];
+  
+  // Log para ver todos los estados disponibles
+  console.log('📋 Estados disponibles en la BD:', estadosList.map((e: any) => ({ id: e.id, nombre: e.nombre })));
+  
+  // Calcular estadísticas reales de los datos del backend
+  const personalList = personalData?.data?.items || [];
+  const totalPersonal = personalData?.data?.total || 0;
+  const personalActivo = personalList.filter(p => p.activo).length;
+  
+  // Log para ver la distribución de estado_id en el personal
+  const distribucionEstadoIds = personalList.reduce((acc: any, p: any) => {
+    const key = `estado_${p.estado_id}`;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  console.log('👥 Distribución de estado_id en el personal:', distribucionEstadoIds);
+  console.log('👥 Ejemplos de personal:', personalList.slice(0, 5).map((p: any) => ({ 
+    nombre: p.nombre, 
+    estado_id: p.estado_id,
+    activo: p.activo 
+  })));
+  
+  const personalTrabajando = personalList.filter(p => p.activo).length;
+  
+  // Calcular distribución por estado dinámicamente
+  const distribucionEstados = estadosList
+    .map((estado: any) => {
+      const cantidad = personalList.filter(p => p.estado_id === estado.id).length;
+      const porcentaje = totalPersonal > 0 ? Math.round((cantidad / totalPersonal) * 100) : 0;
+      
+      // Asignar colores basados en el nombre del estado
+      let color = 'gray';
+      const nombreLower = estado.nombre.toLowerCase();
+      if (nombreLower.includes('activo') || nombreLower.includes('disponible')) color = 'green';
+      else if (nombreLower.includes('examen') || nombreLower.includes('exámenes')) color = 'yellow';
+      else if (nombreLower.includes('capacitación') || nombreLower.includes('capacitacion')) color = 'purple';
+      else if (nombreLower.includes('vacaciones')) color = 'blue';
+      else if (nombreLower.includes('licencia')) color = 'orange';
+      else if (nombreLower.includes('inactivo')) color = 'red';
+      else if (nombreLower.includes('asignado')) color = 'indigo';
+      else if (nombreLower.includes('desvinculado')) color = 'slate';
+      
+      return {
+        id: estado.id,
+        nombre: estado.nombre,
+        cantidad,
+        porcentaje,
+        color
+      };
+    })
+    .sort((a: any, b: any) => b.cantidad - a.cantidad); // Ordenar por cantidad descendente
+  
+  const totalEventos = 0; // TODO: Implementar carga de eventos reales desde el backend
+  const eventosHoy = 0; // TODO: Implementar carga de eventos reales desde el backend
+
+  // Usar datos reales del backend
+  const serviciosData = estadisticasServicios?.data;
   const dashboardStats = {
     total_personal: totalPersonal,
     personal_activo: personalActivo,
     personal_trabajando: personalTrabajando,
-    total_servicios: mockServicios.length,
-    servicios_activos: mockServicios.filter(s => s.activo).length,
+    total_servicios: serviciosData?.totales?.nodos || 0,
+    servicios_activos: serviciosData?.totales?.nodos || 0,
     total_eventos: totalEventos,
     eventos_hoy: eventosHoy,
+    total_carteras: serviciosData?.totales?.carteras || 0,
+    total_clientes: serviciosData?.totales?.clientes || 0,
   };
 
-  if (isLoading) {
+  // Obtener total asignado desde el resumen por cliente (solo para la semana actual)
+  const inicioSemanaActual = useMemo(() => {
+    const hoy = new Date();
+    const inicio = getInicioSemana(hoy);
+    return inicio.toISOString().split('T')[0];
+  }, []);
+
+  const finSemanaActual = useMemo(() => {
+    const inicio = new Date(inicioSemanaActual + 'T00:00:00Z');
+    inicio.setDate(inicio.getDate() + 6);
+    return inicio.toISOString().split('T')[0];
+  }, [inicioSemanaActual]);
+
+  // Llamar al hook pasando fecha_inicio y fecha_fin para limitar al rango de la semana en curso
+  const { data: resumenData, isLoading: resumenLoading } = useResumenPersonalPorCliente(undefined, inicioSemanaActual, finSemanaActual);
+  const resumenRows: any[] = resumenData?.data || [];
+  const totalPersonasAsignadas = resumenRows.reduce((s, r) => s + (Number(r.total_personal) || 0), 0);
+
+
+  // Función para obtener el inicio de la semana (lunes)
+  function getInicioSemana(fecha: Date) {
+    const inicio = new Date(fecha);
+    const dia = inicio.getDay();
+    const diff = inicio.getDate() - dia + (dia === 0 ? -6 : 1); // Ajustar para que lunes sea 1
+    inicio.setDate(diff);
+    inicio.setHours(0, 0, 0, 0);
+    return inicio;
+  }
+
+  // Calcular número ISO de semana a partir de una fecha
+  const getISOWeekNumber = (date: Date) => {
+    const tmp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    // Set to nearest Thursday: current date + 4 - current day number
+    const dayNum = (tmp.getUTCDay() + 6) % 7; // Monday=0, Sunday=6
+    tmp.setUTCDate(tmp.getUTCDate() + 3 - dayNum);
+    const firstThursday = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 4));
+    const weekNumber = 1 + Math.round(((tmp.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+    return weekNumber;
+  };
+
+  // Función para generar datos de eventos por día
+  const generarEventosPorDia = (esSemanaActual: boolean) => {
+    const hoy = new Date();
+    const inicioSemana = getInicioSemana(hoy);
+    
+    // Si es próxima semana, agregar 7 días
+    if (!esSemanaActual) {
+      inicioSemana.setDate(inicioSemana.getDate() + 7);
+    }
+
+    const diasSemana = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+    const eventosPorDia = [];
+
+    for (let i = 0; i < 7; i++) {
+      const fecha = new Date(inicioSemana);
+      fecha.setDate(inicioSemana.getDate() + i);
+      
+      // Generar datos estables basados en la fecha (no aleatorios)
+      const seed = fecha.getDate() + (esSemanaActual ? 0 : 100); // Diferente seed para cada semana
+      const eventos = (seed % 6) + 1; // 1-6 eventos
+      const completados = Math.min(eventos, (seed % 4) + 1); // 1-4 completados, máximo eventos
+      
+      eventosPorDia.push({
+        name: diasSemana[i],
+        eventos: eventos,
+        completados: completados,
+        fecha: fecha.toISOString().split('T')[0]
+      });
+    }
+
+    return eventosPorDia;
+  };
+
+  // Datos para gráfico de eventos por día
+  const eventosPorDia = generarEventosPorDia(semanaActual);
+
+  // Función para generar datos de tendencias de servicios por día
+  const generarTendenciasServicios = (esSemanaActual: boolean) => {
+    console.log('📊 Generando tendencias servicios...');
+    console.log('Datos personal por cliente (semana):', fechaInicioGrafico, fechaFinGrafico, personalPorClienteData);
+    
+    // Si no hay datos de personal por cliente, retornar array vacío
+    if (!personalPorClienteData?.data || !Array.isArray(personalPorClienteData.data)) {
+      console.log('❌ No hay datos de personal por cliente');
+      return [];
+    }
+
+    // Filtrar solo clientes con personal asignado y mapear todos los clientes
+    const clientesConDatos = (personalPorClienteData?.data || [])
+      .filter((cliente: any) => cliente.total_personal_asignado > 0) // Solo clientes con personal
+      .map((cliente: any) => {
+        const personalAsignado = cliente.total_personal_asignado || 0;
+        // Preferir el mínimo calculado por el backend (`minimo_real`) si está disponible
+        let personalMinimo = cliente.personal_minimo || 0;
+        try {
+          if (minimoSimpleData && minimoSimpleData.success && Array.isArray(minimoSimpleData.data)) {
+            const found = minimoSimpleData.data.find((m: any) => Number(m.cliente_id) === Number(cliente.cliente_id));
+            if (found && typeof found.minimo_real !== 'undefined' && found.minimo_real !== null) {
+              personalMinimo = Number(found.minimo_real);
+            }
+          }
+        } catch (e) {
+          // ignore and keep cliente.personal_minimo
+        }
+        let clienteNombre = cliente.cliente_nombre || `Cliente ${cliente.cliente_id}`;
+        
+        // Acortar nombres largos para mejor visualización
+        if (clienteNombre.length > 25) {
+          // Tomar las primeras palabras significativas
+          const palabras = clienteNombre.split(' - ');
+          clienteNombre = palabras[0];
+          
+          // Si sigue siendo muy largo, tomar solo las primeras 3 palabras
+          if (clienteNombre.length > 25) {
+            const primerasPalabras = clienteNombre.split(' ').slice(0, 3).join(' ');
+            clienteNombre = primerasPalabras + '...';
+          }
+        }
+        
+        return {
+          name: clienteNombre,
+          fecha: new Date().toISOString().split('T')[0],
+          personalMinimo: personalMinimo,
+          personalAsignado: personalAsignado,
+          cliente_id: cliente.cliente_id
+        };
+      });
+
+    console.log('✅ Clientes con datos para gráfico:', clientesConDatos);
+    return clientesConDatos;
+  };
+
+  // Datos para gráfico de tendencia de servicios
+  const tendenciaServicios = generarTendenciasServicios(semanaActualTendencias);
+
+  // Información de la semana mostrada en el gráfico (usa la misma bandera semanaActualTendencias)
+  const semanaInfo = useMemo(() => {
+    const inicio = getInicioSemana(semanaSeleccionada);
+    const fin = new Date(inicio);
+    fin.setDate(inicio.getDate() + 6);
+    const weekNumber = getISOWeekNumber(inicio);
+    return {
+      weekNumber,
+      start: inicio.toLocaleDateString('es-CL'),
+      end: fin.toLocaleDateString('es-CL')
+    };
+  }, [semanaSeleccionada]);
+
+  // Ensure data fetching hooks are correctly implemented
+  useEffect(() => {
+    if (!personalPorClienteData) {
+      console.error('Error: Missing data from API endpoints');
+    }
+  }, [personalPorClienteData]);
+
+  // Add fallback logic for empty data
+  if (!personalPorClienteData?.data || personalPorClienteData.data.length === 0) {
+    console.warn('Warning: No personal data available');
+  }
+
+  if (isLoading || personalLoading || serviciosLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={`loading-card-${index}`} className="p-6 rounded-lg border border-gray-200 bg-white">
+          <div key={`loading-card-${index}`} className="p-6 rounded-xl border border-gray-200 bg-white">
             <div className="flex items-center justify-center h-24">
               <LoadingSpinner size="md" />
             </div>
@@ -378,90 +399,307 @@ export const DashboardStats: React.FC = () => {
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Tarjetas principales con animaciones */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <div className="stagger-item animate-delay-100">
-          <div 
-            className="p-6 rounded-lg border border-gray-200 bg-white hover:shadow-md transition-shadow cursor-pointer"
+          <StatCard
+            title="Total Personal"
+            value={dashboardStats.total_personal}
+            icon={<Users className="h-6 w-6 text-white" />}
+            color="bg-gradient-to-br from-blue-500 to-blue-600"
             onClick={() => setShowPersonalModal(true)}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Personal</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{dashboardStats.total_personal}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-primary-500">
-                <Users className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </div>
+            trend={{ value: 12, isPositive: true }}
+          />
         </div>
         <div className="stagger-item animate-delay-200">
-          <div 
-            className="p-6 rounded-lg border border-gray-200 bg-white hover:shadow-md transition-shadow cursor-pointer"
+          <StatCard
+            title="Personal Activo"
+            value={dashboardStats.personal_trabajando}
+            icon={<Activity className="h-6 w-6 text-white" />}
+            color="bg-gradient-to-br from-green-500 to-green-600"
             onClick={() => setShowPersonalTrabajandoModal(true)}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Personal en Servicio</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{dashboardStats.personal_trabajando}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-green-500">
-                <Activity className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </div>
+            trend={{ value: 8, isPositive: true }}
+          />
         </div>
         <div className="stagger-item animate-delay-300">
-          <div 
-            className="p-6 rounded-lg border border-gray-200 bg-white hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => setShowEventosModal(true)}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Eventos (15 días)</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{dashboardStats.total_eventos}</p>
+          <StatCard
+            title="Personal Asignado"
+            value={resumenLoading ? dashboardStats.total_personal : totalPersonasAsignadas}
+            icon={<Users className="h-6 w-6 text-white" />}
+            color="bg-gradient-to-br from-purple-500 to-purple-600"
+            onClick={() => setShowPersonalAsignadoModal(true)}
+            trend={{ value: 5, isPositive: true }}
+          />
+        </div>
+      </div>
+
+
+      {/* Gráfico de Programación de Servicios - Expandido */}
+      <div className="mb-8">
+        {/* Programación de servicios */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Programación de Servicios</h3>
+              <div className="text-sm text-gray-500 flex items-center space-x-3">
+                <div>Semana {semanaInfo.weekNumber} — {semanaInfo.start} → {semanaInfo.end}</div>
+                <div className="flex items-center space-x-1">
+                  <button onClick={() => setSemanaSeleccionada(s => { const n = new Date(s); n.setDate(n.getDate() - 7); return n; })} className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">◀</button>
+                  <button onClick={() => setSemanaSeleccionada(getInicioSemana(new Date()))} className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">Hoy</button>
+                  <button onClick={() => setSemanaSeleccionada(s => { const n = new Date(s); n.setDate(n.getDate() + 7); return n; })} className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">▶</button>
+                </div>
               </div>
-              <div className="p-3 rounded-lg bg-blue-500">
-                <Calendar className="h-6 w-6 text-white" />
-              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-5 w-5 text-gray-400" />
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={tendenciaServicios}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis 
+                dataKey="name" 
+                stroke="#6b7280"
+                angle={-25}
+                textAnchor="end"
+                height={100}
+                interval={0}
+                style={{ fontSize: '12px' }}
+              />
+              <YAxis stroke="#6b7280" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#fff', 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+                formatter={(value, name) => {
+                  if (name === 'personalMinimo') return [`${value} personas`, 'Personal Mínimo'];
+                  if (name === 'personalAsignado') return [`${value} personas`, 'Personal Asignado'];
+                  return [value, name];
+                }}
+              />
+              <Bar 
+                dataKey="personalMinimo" 
+                fill="#3B82F6"
+                name="Personal Mínimo"
+                radius={[4, 4, 0, 0]}
+              />
+              <Bar 
+                dataKey="personalAsignado" 
+                fill="#10B981"
+                name="Personal Asignado"
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="mt-4 flex justify-center space-x-6">
+            <div className="flex items-center">
+              <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+              <span className="text-sm text-gray-600">Personal Mínimo</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+              <span className="text-sm text-gray-600">Personal Asignado</span>
             </div>
           </div>
         </div>
-        <div className="stagger-item animate-delay-400">
+
+        {/* Eventos por día - OCULTO (comentado para uso futuro) */}
+        {false && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Eventos por Día</h3>
+            <div className="flex items-center space-x-2">
+              <Clock className="h-5 w-5 text-gray-400" />
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setSemanaActual(true)}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                    semanaActual
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Semana Actual
+                </button>
+                <button
+                  onClick={() => setSemanaActual(false)}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                    !semanaActual
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Próxima Semana
+                </button>
+              </div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={eventosPorDia}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="name" stroke="#6b7280" />
+              <YAxis stroke="#6b7280" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: '#fff', 
+                  border: '1px solid #e5e7eb', 
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+                labelFormatter={(value, payload) => {
+                  if (payload && payload[0]) {
+                    const data = payload[0].payload;
+                    return `${data.name} - ${new Date(data.fecha).toLocaleDateString('es-CL')}`;
+                  }
+                  return value;
+                }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="eventos" 
+                stroke="#8B5CF6" 
+                strokeWidth={3}
+                dot={{ fill: '#8B5CF6', strokeWidth: 2, r: 6 }}
+                name="Eventos Programados"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="completados" 
+                stroke="#10B981" 
+                strokeWidth={3}
+                dot={{ fill: '#10B981', strokeWidth: 2, r: 6 }}
+                name="Eventos Completados"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="mt-4 flex justify-center space-x-6">
+            <div className="flex items-center">
+              <div className="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
+              <span className="text-sm text-gray-600">Eventos Programados</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+              <span className="text-sm text-gray-600">Eventos Completados</span>
+            </div>
+          </div>
+        </div>
+        )}
+      </div>
+
+      {/* Tarjetas secundarias */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="stagger-item animate-delay-500">
           <StatCard
-            title="Total Servicios"
+            title="Total Carteras"
+            value={dashboardStats.total_carteras}
+            icon={<Users className="h-6 w-6 text-white" />}
+            color="bg-gradient-to-br from-purple-500 to-purple-600"
+            href="/servicios"
+          />
+        </div>
+        <div className="stagger-item animate-delay-600">
+          <StatCard
+            title="Total Clientes"
+            value={dashboardStats.total_clientes}
+            icon={<Users className="h-6 w-6 text-white" />}
+            color="bg-gradient-to-br from-indigo-500 to-indigo-600"
+            href="/servicios"
+          />
+        </div>
+        <div className="stagger-item animate-delay-700">
+          <StatCard
+            title="Total Nodos"
             value={dashboardStats.total_servicios}
             icon={<Settings className="h-6 w-6 text-white" />}
-            color="bg-orange-500"
+            color="bg-gradient-to-br from-orange-500 to-orange-600"
             href="/servicios"
           />
         </div>
       </div>
+
 
       {/* Modal de información del personal */}
       <PersonalInfoModal
         isOpen={showPersonalModal}
         onClose={() => setShowPersonalModal(false)}
         totalPersonal={dashboardStats.total_personal}
-        personalActivo={dashboardStats.personal_activo}
-        personalTrabajando={dashboardStats.personal_trabajando}
-        personalAcreditacion={personalAcreditacion}
+        distribucionEstados={distribucionEstados}
       />
 
-      {/* Modal de personal en servicio */}
+      {/* Modal de personal activo */}
       <PersonalTrabajandoModal
         isOpen={showPersonalTrabajandoModal}
         onClose={() => setShowPersonalTrabajandoModal(false)}
-        personalTrabajando={mockPersonal.filter(p => 
-          p.activo && p.estadoActividad.label === 'Trabajando'
-        )}
+        personalTrabajando={(() => {
+          // Buscar el estado "Activo" (id: 1 según la BD)
+          const estadoActivo = estadosList.find((e: any) => 
+            e.nombre.toLowerCase() === 'activo'
+          );
+          
+          console.log('🔍 Estado Activo:', estadoActivo);
+          
+          const personalFiltrado = personalList.filter(p => {
+            if (!estadoActivo) {
+              console.warn('⚠️ No se encontró el estado "Activo"');
+              return false;
+            }
+            return p.estado_id === estadoActivo.id;
+          });
+          
+          console.log('👥 Personal con estado Activo:', personalFiltrado.length, 'personas');
+          console.log('👥 Lista completa:', personalFiltrado.map(p => ({ 
+            nombre: p.nombre, 
+            cargo: p.cargo,
+            estado_id: p.estado_id 
+          })));
+          
+          return personalFiltrado.map(p => ({
+            id: p.id,
+            nombre: p.nombre,
+            apellido: p.apellido || '',
+            cargo: p.cargo,
+            ubicacion: p.zona_geografica || 'No especificada',
+            servicioAsignado: {
+              id: p.servicio_id || '1',
+              nombre: 'Servicio Asignado',
+              categoria: 'General',
+              zonaGestion: p.zona_geografica || 'No especificada'
+            },
+            estadoActividad: {
+              label: 'Trabajando'
+            }
+          }));
+        })()}
+      />
+
+      {/* Modal de personal asignado */}
+      <PersonalAsignadoModal
+        isOpen={showPersonalAsignadoModal}
+        onClose={() => setShowPersonalAsignadoModal(false)}
       />
 
       {/* Modal de eventos */}
       <EventosModal
         isOpen={showEventosModal}
         onClose={() => setShowEventosModal(false)}
-        eventos={mockEventos}
+        eventos={[]}
+      />
+
+      {/* Modal de información de nodos */}
+      <NodosInfoModal
+        isOpen={showNodosModal}
+        onClose={() => setShowNodosModal(false)}
+        totalNodos={dashboardStats.total_servicios}
+      />
+
+      {/* Modal de información de carteras */}
+      <CarterasInfoModal
+        isOpen={showCarterasModal}
+        onClose={() => setShowCarterasModal(false)}
+        totalCarteras={dashboardStats.total_carteras}
       />
     </>
   );

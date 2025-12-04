@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiService } from '../services/api';
+import apiService from '../services/api';
 
 // Interfaz para la tabla nombres
 export interface Nombre {
@@ -74,12 +74,36 @@ export const useCreatePersonal = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (data: CreateNombreData) => apiService.createPersonal(data),
+    mutationFn: async (data: CreateNombreData) => {
+      // eslint-disable-next-line no-console
+      console.log('🔍 Creando personal con datos:', data);
+      
+      // Preparar datos para el backend (solo nombres)
+      const { nombre, ...restData } = data;
+      const personalData = {
+        ...restData,
+        nombres: nombre // Solo usar 'nombres' como solicitaste
+      };
+      
+      const personalResponse = await apiService.createPersonal(personalData);
+      // eslint-disable-next-line no-console
+      console.log('✅ Personal creado exitosamente:', personalResponse);
+      
+      return personalResponse;
+    },
     onSuccess: (response, variables) => {
       // Invalidar queries relacionadas
       queryClient.invalidateQueries({ queryKey: ['personal', variables.rut] });
       queryClient.invalidateQueries({ queryKey: ['personal', 'stats'] });
       queryClient.invalidateQueries({ queryKey: ['personal', 'search'] });
+      try {
+        const rut = variables.rut;
+        const nombre = (response && (response.data?.nombre || response.data?.nombres)) || null;
+        const ev = new CustomEvent('personalUpdated', { detail: { id: rut, rut, nombre, updated: response } });
+        window.dispatchEvent(ev);
+      } catch (err) {
+        // swallow
+      }
     },
   });
 };
@@ -89,8 +113,29 @@ export const useUpdatePersonalData = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ rut, data }: { rut: string; data: UpdateNombreData }) => 
-      apiService.updatePersonalData(rut, data),
+    mutationFn: async ({ rut, data }: { rut: string; data: UpdateNombreData }) => {
+      // eslint-disable-next-line no-console
+      console.log('🔍 Actualizando personal con datos:', { rut, data });
+      
+      // Preparar datos para el backend (solo nombres)
+      const { nombre, ...restData } = data;
+      const personalData = {
+        ...restData,
+        nombres: nombre // Solo usar 'nombres' como solicitaste
+      };
+      
+      // Validar datos antes de enviar
+      const validationErrors = validateNombreData(data);
+      if (validationErrors.length > 0) {
+        throw new Error(`Datos inválidos: ${validationErrors.join(', ')}`);
+      }
+      
+      const personalResponse = await apiService.updatePersonalData(rut, personalData);
+      // eslint-disable-next-line no-console
+      console.log('✅ Personal actualizado exitosamente:', personalResponse);
+      
+      return personalResponse;
+    },
     onSuccess: (response, variables) => {
       // Invalidar queries relacionadas
       queryClient.invalidateQueries({ queryKey: ['personal', variables.rut] });
